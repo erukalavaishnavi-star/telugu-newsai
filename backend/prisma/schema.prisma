@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon: pooled URL for runtime; direct URL for migrations (set both in production)
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  admin
+  editor
+  viewer
+}
+
+enum Plan {
+  free
+  pro
+  enterprise
+}
+
+enum Sentiment {
+  positive
+  neutral
+  negative
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  orgName   String?  @map("org_name")
+  role      Role     @default(editor)
+  plan      Plan     @default(free)
+  apiKey    String?  @unique @map("api_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  articles         Article[]
+  generatedPosts   GeneratedPost[]
+  generationHistory GenerationHistory[]
+
+  @@map("users")
+}
+
+model Article {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String?  @db.VarChar(500)
+  body      String
+  category  String   @default("general")
+  charCount Int      @map("char_count")
+  sentiment Sentiment?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts  GeneratedPost[]
+
+  @@map("articles")
+}
+
+model GeneratedPost {
+  id               String   @id @default(uuid())
+  articleId        String   @map("article_id")
+  userId           String   @map("user_id")
+  headline         String?  @db.VarChar(500)
+  keyFacts         Json?    @map("key_facts")
+  summary          String?
+  captionVariations Json?   @map("caption_variations")
+  facebookPost     String?  @map("facebook_post")
+  instagramCaption String?  @map("instagram_caption")
+  twitterPost      String?  @db.VarChar(280) @map("twitter_post")
+  whatsappText     String?  @map("whatsapp_text")
+  youtubePost      String?  @map("youtube_post")
+  breakingAlert    String?  @map("breaking_alert")
+  generationMs     Int      @map("generation_ms")
+  aiModel          String   @default("gemini-1.5-flash") @map("ai_model")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  hashtags    Hashtag[]
+  seoKeywords SeoKeyword[]
+  history     GenerationHistory[]
+
+  @@map("generated_posts")
+}
+
+model Hashtag {
+  id         String @id @default(uuid())
+  postId     String @map("post_id")
+  tag        String @db.VarChar(100)
+  usageCount Int    @default(1) @map("usage_count")
+
+  post GeneratedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("hashtags")
+}
+
+model SeoKeyword {
+  id      String @id @default(uuid())
+  postId  String @map("post_id")
+  keyword String @db.VarChar(150)
+
+  post GeneratedPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@map("seo_keywords")
+}
+
+model GenerationHistory {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  action    String   @default("generate")
+  platform  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User          @relation(fields: [userId], references: [id])
+  post GeneratedPost @relation(fields: [postId], references: [id])
+
+  @@map("generation_history")
+}

@@ -1,0 +1,59 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
+      - name: Frontend type check
+        run: cd frontend && npm run type-check
+
+      - name: Install backend deps
+        run: cd backend && npm ci
+
+      - name: Backend type check
+        run: cd backend && npx tsc --noEmit
+
+  # Backend deploys via Render (GitHub integration or Blueprint).
+  # Frontend deploys via Vercel (GitHub integration).
+  # Optional: use VERCEL_TOKEN for CLI deploy below.
+
+  deploy-frontend:
+    name: Deploy Frontend to Vercel
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && vars.ENABLE_VERCEL_DEPLOY == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Deploy to Vercel
+        run: |
+          cd frontend
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
